@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -28,21 +29,133 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase/client';
+import { createEmployeeAction } from '@/app/actions/employee-actions';
+import type { Database } from '@/lib/supabase/models';
 
-type Employee = {
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    status: string;
-};
-
-const initialEmployees: Employee[] = [];
+type Employee = Database['public']['Tables']['funcionarios']['Row'];
+type Company = Database['public']['Tables']['empresas']['Row'];
 
 export default function CompanyPage() {
-  const [employees, setEmployees] = useState(initialEmployees);
+  const router = useRouter();
+  const { toast } = useToast();
 
-  const getStatusVariant = (status: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [company, setCompany] = useState<Company | null>(null);
+
+  const [isAddEmployeeDialogOpen, setIsAddEmployeeDialogOpen] = useState(false);
+  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [newEmployeeForm, setNewEmployeeForm] = useState({
+    name: '',
+    email: '',
+    cpf: '',
+    cargo: '',
+    password: ''
+  });
+
+  useEffect(() => {
+    const fetchCompanyData = async () => {
+      setIsLoading(true);
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        toast({ variant: 'destructive', title: 'Não autenticado', description: 'Você precisa estar logado para ver esta página.' });
+        router.push('/login');
+        return;
+      }
+
+      const userId = session.user.id;
+      
+      try {
+        const { data: userProfile, error: profileError } = await supabase
+          .from('usuarios')
+          .select('cnpj, tipo')
+          .eq('id', userId)
+          .single();
+        
+        if (profileError || !userProfile || userProfile.tipo !== 'empresa') {
+          throw new Error('Perfil da empresa não encontrado ou inválido.');
+        }
+
+        if (!userProfile.cnpj) {
+            throw new Error('O CNPJ da empresa não está definido no perfil do usuário.');
+        }
+
+        const { data: companyData, error: companyError } = await supabase
+          .from('empresas')
+          .select('*')
+          .eq('cnpj', userProfile.cnpj)
+          .single();
+        
+        if (companyError || !companyData) {
+          throw new Error('Dados da empresa não encontrados.');
+        }
+        setCompany(companyData);
+
+        const { data: employeesData, error: employeesError } = await supabase
+          .from('funcionarios')
+          .select('*')
+          .eq('empresa_id', companyData.id);
+
+        if (employeesError) {
+          throw new Error('Não foi possível carregar os funcionários.');
+        }
+
+        setEmployees(employeesData || []);
+
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Erro ao carregar dados', description: error.message });
+        router.push('/login');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCompanyData();
+  }, [router, toast]);
+
+
+  const handleAddEmployee = async () => {
+    if (!company) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'ID da empresa não encontrado. Recarregue a página.' });
+      return;
+    }
+    setIsAddingEmployee(true);
+    try {
+      const result = await createEmployeeAction({
+        companyId: company.id,
+        name: newEmployeeForm.name,
+        email: newEmployeeForm.email,
+        cpf: newEmployeeForm.cpf,
+        cargo: newEmployeeForm.cargo,
+        password: newEmployeeForm.password,
+      });
+
+      if (result.success && result.employee) {
+        setEmployees(prev => [...prev, result.employee!]);
+        toast({ title: 'Sucesso!', description: result.message });
+        setIsAddEmployeeDialogOpen(false);
+        setNewEmployeeForm({ name: '', email: '', cpf: '', cargo: '', password: '' });
+      } else {
+        throw new Error(result.message || 'Ocorreu um erro desconhecido.');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro ao Adicionar Funcionário', description: error.message });
+    } finally {
+      setIsAddingEmployee(false);
+    }
+  };
+
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setNewEmployeeForm(prev => ({ ...prev, [id]: value }));
+  }
+
+  const getStatusVariant = (status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
       case 'Ativo':
         return 'secondary';
@@ -53,7 +166,19 @@ export default function CompanyPage() {
     }
   };
 
+  if (isLoading) {
+    return (
+        <div className="flex items-center justify-center h-screen">
+            <div className="text-center">
+                <p>Carregando dados da empresa...</p>
+            </div>
+        </div>
+    );
+  }
+
+
   return (
+    <>
     <Tabs defaultValue="employees">
         <div className="flex justify-between items-center mb-4">
             <TabsList>
@@ -61,7 +186,7 @@ export default function CompanyPage() {
                 <TabsTrigger value="approvals">Aprovações de Ausência</TabsTrigger>
                 <TabsTrigger value="settings">Configurações de Jornada</TabsTrigger>
             </TabsList>
-             <Button>
+             <Button onClick={() => setIsAddEmployeeDialogOpen(true)}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Adicionar Funcionário
             </Button>
@@ -95,18 +220,18 @@ export default function CompanyPage() {
                                     <Avatar className="h-9 w-9">
                                     <AvatarImage
                                         src={`https://placehold.co/40x40.png`}
-                                        alt={employee.name}
+                                        alt={employee.nome || ''}
                                         data-ai-hint="person portrait"
                                     />
-                                    <AvatarFallback>{employee.name.substring(0,2)}</AvatarFallback>
+                                    <AvatarFallback>{employee.nome?.substring(0,2)}</AvatarFallback>
                                     </Avatar>
                                     <div className="grid gap-0.5">
-                                        <span className="font-medium">{employee.name}</span>
+                                        <span className="font-medium">{employee.nome}</span>
                                         <span className="text-xs text-muted-foreground">{employee.email}</span>
                                     </div>
                                 </div>
                                 </TableCell>
-                                <TableCell>{employee.role}</TableCell>
+                                <TableCell>{employee.cargo}</TableCell>
                                 <TableCell>
                                 <Badge variant={getStatusVariant(employee.status)}>
                                     {employee.status}
@@ -132,7 +257,7 @@ export default function CompanyPage() {
                     ) : (
                         <TableRow>
                             <TableCell colSpan={4} className="h-24 text-center">
-                                Nenhum funcionário encontrado.
+                                Nenhum funcionário encontrado. Clique em "Adicionar Funcionário" para começar.
                             </TableCell>
                         </TableRow>
                     )}
@@ -169,5 +294,46 @@ export default function CompanyPage() {
         </TabsContent>
     </Tabs>
 
+    <Dialog open={isAddEmployeeDialogOpen} onOpenChange={setIsAddEmployeeDialogOpen}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Adicionar Novo Funcionário</DialogTitle>
+          <DialogDescription>
+            A empresa cria o login e a senha para o funcionário acessar o sistema.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">Nome</Label>
+            <Input id="name" value={newEmployeeForm.name} onChange={handleFormChange} className="col-span-3" placeholder="Nome completo" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="email" className="text-right">Email</Label>
+            <Input id="email" type="email" value={newEmployeeForm.email} onChange={handleFormChange} className="col-span-3" placeholder="email@dominio.com" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="cpf" className="text-right">CPF</Label>
+            <Input id="cpf" value={newEmployeeForm.cpf} onChange={handleFormChange} className="col-span-3" placeholder="Apenas números" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="cargo" className="text-right">Cargo</Label>
+            <Input id="cargo" value={newEmployeeForm.cargo} onChange={handleFormChange} className="col-span-3" placeholder="Ex: Vendedor" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="password" className="text-right">Senha</Label>
+            <Input id="password" type="password" value={newEmployeeForm.password} onChange={handleFormChange} className="col-span-3" placeholder="Mínimo 6 caracteres" />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancelar</Button>
+          </DialogClose>
+          <Button onClick={handleAddEmployee} disabled={isAddingEmployee}>
+            {isAddingEmployee ? 'Adicionando...' : 'Adicionar Funcionário'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
