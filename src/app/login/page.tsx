@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Fingerprint } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase/client';
@@ -28,6 +28,30 @@ export default function LoginPage() {
   const [companyPassword, setCompanyPassword] = useState('');
   const [employeeIdentifier, setEmployeeIdentifier] = useState('');
   const [employeePassword, setEmployeePassword] = useState('');
+
+  useEffect(() => {
+    // Este efeito é executado no lado do cliente para verificar erros de autenticação no hash da URL
+    const hash = window.location.hash;
+    if (hash.startsWith('#error')) {
+      const params = new URLSearchParams(hash.substring(1));
+      const errorCode = params.get('error_code');
+      
+      let errorMessage = 'O link utilizado é inválido ou já expirou. Por favor, solicite um novo.';
+
+      // Você pode adicionar mensagens mais específicas para outros códigos de erro, se necessário
+      // if (errorCode === 'outro_codigo') { ... }
+      
+      toast({
+        variant: 'destructive',
+        title: 'Falha na Autenticação',
+        description: errorMessage,
+        duration: 9000,
+      });
+
+      // Limpa a URL para remover o hash de erro, para que a mensagem não reapareça ao atualizar
+      router.replace('/login', { scroll: false });
+    }
+  }, [router, toast]);
 
   const handleEmployeeLogin = async (e: React.FormEvent) => {
     e.preventDefault();
