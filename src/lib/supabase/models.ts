@@ -187,30 +187,48 @@ export interface Database {
       }
       faltas_programadas: {
         Row: {
-          data_falta: string | null
-          documento_link: string | null
-          funcionario_id: string | null
           id: number
-          motivo: string | null
-          status_aprovacao: string | null
+          funcionario_id: string
+          empresa_id: string
+          tipo: string
+          data_inicio: string
+          data_fim: string | null
+          motivo: string
+          documento_link: string | null
+          status_aprovacao: string
+          criado_em: string
         }
         Insert: {
-          data_falta?: string | null
-          documento_link?: string | null
-          funcionario_id?: string | null
           id?: number
-          motivo?: string | null
-          status_aprovacao?: string | null
+          funcionario_id: string
+          empresa_id: string
+          tipo: string
+          data_inicio: string
+          data_fim?: string | null
+          motivo: string
+          documento_link?: string | null
+          status_aprovacao?: string
+          criado_em?: string
         }
         Update: {
-          data_falta?: string | null
-          documento_link?: string | null
-          funcionario_id?: string | null
           id?: number
-          motivo?: string | null
-          status_aprovacao?: string | null
+          funcionario_id?: string
+          empresa_id?: string
+          tipo?: string
+          data_inicio?: string
+          data_fim?: string | null
+          motivo?: string
+          documento_link?: string | null
+          status_aprovacao?: string
+          criado_em?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "faltas_programadas_empresa_id_fkey"
+            columns: ["empresa_id"]
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "faltas_programadas_funcionario_id_fkey"
             columns: ["funcionario_id"]
@@ -235,7 +253,7 @@ export interface Database {
           criado_em?: string | null
           email?: string | null
           empresa_id?: string | null
-          id?: string
+          id: string
           nome?: string | null
           status?: string | null
           telefone?: string | null
@@ -255,6 +273,12 @@ export interface Database {
             foreignKeyName: "funcionarios_empresa_id_fkey"
             columns: ["empresa_id"]
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funcionarios_id_fkey"
+            columns: ["id"]
+            referencedRelation: "usuarios"
             referencedColumns: ["id"]
           }
         ]
@@ -563,7 +587,7 @@ export interface Database {
           telefone: string | null
         }
         Insert: {
-          id?: string
+          id: string
           nome?: string | null
           email?: string | null
           senha?: string | null

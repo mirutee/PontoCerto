@@ -16,23 +16,37 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getAbsenceRequestsForEmployee } from '@/app/actions/absence-actions';
+import type { Database } from '@/lib/supabase/models';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
 
-type RecentRequest = {
-  id: string;
-  type: string;
-  startDate: string;
-  endDate: string;
-  status: string;
-};
-
-const initialRequests: RecentRequest[] = [];
+type AbsenceRequest = Database['public']['Tables']['faltas_programadas']['Row'];
 
 export default function AbsencePage() {
-  const [recentRequests, setRecentRequests] = useState(initialRequests);
+  const [requests, setRequests] = useState<AbsenceRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchRequests = async () => {
+      setIsLoading(true);
+      const result = await getAbsenceRequestsForEmployee();
+      if (result.success) {
+        setRequests(result.data || []);
+      } else {
+        toast({ variant: 'destructive', title: 'Erro', description: result.message });
+      }
+      setIsLoading(false);
+    };
+    fetchRequests();
+  }, [toast]);
+  
   const getStatusVariant = (
     status: string
-  ): 'default' | 'secondary' | 'destructive' | 'outline' => {
+  ): 'secondary' | 'default' | 'destructive' | 'outline' => {
     switch (status) {
       case 'Aprovado':
         return 'secondary';
@@ -45,10 +59,20 @@ export default function AbsencePage() {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    try {
+      return format(parseISO(dateString), "dd/MM/yyyy", { locale: ptBR });
+    } catch (error) {
+      return 'Data inválida';
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div className="md:col-span-1">
-        <AbsenceRequestForm />
+        <AbsenceRequestForm
+          onNewRequest={(newRequest) => setRequests([newRequest, ...requests])}
+        />
       </div>
       <div className="md:col-span-2">
         <Card>
@@ -62,7 +86,6 @@ export default function AbsencePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID da Solicitação</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Data de Início</TableHead>
                   <TableHead>Data de Fim</TableHead>
@@ -70,23 +93,28 @@ export default function AbsencePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentRequests.length > 0 ? (
-                  recentRequests.map((request) => (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center h-24">
+                      Carregando suas solicitações...
+                    </TableCell>
+                  </TableRow>
+                ) : requests.length > 0 ? (
+                  requests.map((request) => (
                     <TableRow key={request.id}>
-                      <TableCell>{request.id}</TableCell>
-                      <TableCell>{request.type}</TableCell>
-                      <TableCell>{request.startDate}</TableCell>
-                      <TableCell>{request.endDate}</TableCell>
+                      <TableCell>{request.tipo}</TableCell>
+                      <TableCell>{formatDate(request.data_inicio)}</TableCell>
+                      <TableCell>{request.data_fim ? formatDate(request.data_fim) : '-'}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusVariant(request.status)}>
-                          {request.status}
+                        <Badge variant={getStatusVariant(request.status_aprovacao)}>
+                          {request.status_aprovacao}
                         </Badge>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center h-24">
+                    <TableCell colSpan={4} className="text-center h-24">
                       Nenhuma solicitação encontrada.
                     </TableCell>
                   </TableRow>

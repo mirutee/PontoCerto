@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, type SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
@@ -39,42 +39,79 @@ import { CalendarIcon, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { suggestJustificationAction } from '@/app/actions/suggest-justification';
+import { createAbsenceRequestAction } from '@/app/actions/absence-actions';
 import { useToast } from '@/hooks/use-toast';
 import { ptBR } from 'date-fns/locale';
+import type { Database } from '@/lib/supabase/models';
+
+type AbsenceRequest = Database['public']['Tables']['faltas_programadas']['Row'];
 
 const formSchema = z.object({
   timeOffType: z.string({ required_error: 'Por favor, selecione um motivo.' }),
-  dateRange: z.object({
-    from: z.date({ required_error: 'A data de início é obrigatória.' }),
-    to: z.date().optional(),
-  }),
+  dateRange: z.object(
+    {
+      from: z.date({ required_error: 'A data de início é obrigatória.' }),
+      to: z.date().optional(),
+    },
+    { required_error: 'Por favor, selecione o período.' }
+  ),
   justification: z
     .string()
     .min(10, { message: 'A justificativa deve ter pelo menos 10 caracteres.' }),
-  attachment: z.any().optional(),
+  attachment: z.instanceof(File).optional(),
 });
 
-export default function AbsenceRequestForm() {
-  const [isPending, startTransition] = useTransition();
+type FormValues = z.infer<typeof formSchema>;
+
+export default function AbsenceRequestForm({ onNewRequest }: { onNewRequest: (request: AbsenceRequest) => void }) {
+  const [isAiPending, startAiTransition] = useTransition();
+  const [isSubmitPending, startSubmitTransition] = useTransition();
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       justification: '',
     },
   });
+  
+  const onSubmit: SubmitHandler<FormValues> = (values) => {
+    startSubmitTransition(async () => {
+        const formData = new FormData();
+        formData.append('timeOffType', values.timeOffType);
+        formData.append('startDate', values.dateRange.from.toISOString());
+        if (values.dateRange.to) {
+            formData.append('endDate', values.dateRange.to.toISOString());
+        }
+        formData.append('justification', values.justification);
+        if (values.attachment) {
+            formData.append('attachment', values.attachment);
+        }
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: 'Solicitação Enviada',
-      description: 'Sua solicitação de ausência foi enviada com sucesso.',
+        const result = await createAbsenceRequestAction(formData);
+
+        if (result.success) {
+            toast({
+                title: 'Solicitação Enviada',
+                description: result.message,
+            });
+            form.reset();
+            setSuggestions([]);
+            // This is a way to update the parent component's list without a full refresh
+            // But since the action returns void, we can't pass the new request.
+            // A full page reload or re-fetch in the parent is an alternative.
+            // For now, we assume the parent will re-fetch.
+            window.location.reload(); // Simple solution for now
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao Enviar',
+                description: result.message,
+            });
+        }
     });
-    form.reset();
-    setSuggestions([]);
-  }
+  };
 
   const handleSuggestJustification = () => {
     const values = form.getValues();
@@ -87,9 +124,9 @@ export default function AbsenceRequestForm() {
       return;
     }
 
-    startTransition(async () => {
+    startAiTransition(async () => {
       const result = await suggestJustificationAction({
-        employeeName: 'Usuário Admin', // Mock data
+        employeeName: 'Funcionário', // Mock data
         timeOffType: values.timeOffType,
         startDate: format(values.dateRange.from, 'yyyy-MM-dd'),
         endDate: values.dateRange.to
@@ -98,13 +135,13 @@ export default function AbsenceRequestForm() {
         additionalDetails: values.justification,
       });
 
-      if (result.justificationSuggestions) {
+      if (result && result.justificationSuggestions) {
         setSuggestions(result.justificationSuggestions.filter(s => s));
       } else {
         toast({
           variant: 'destructive',
           title: 'Erro da IA',
-          description: 'Não foi possível gerar sugestões neste momento.',
+          description: 'Não foi possível gerar sugestões. Verifique se a chave da API está configurada.',
         });
       }
     });
@@ -130,6 +167,7 @@ export default function AbsenceRequestForm() {
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
+                    disabled={isSubmitPending}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -160,6 +198,7 @@ export default function AbsenceRequestForm() {
                       <FormControl>
                         <Button
                           variant={'outline'}
+                          disabled={isSubmitPending}
                           className={cn(
                             'pl-3 text-left font-normal',
                             !field.value?.from && 'text-muted-foreground'
@@ -168,11 +207,11 @@ export default function AbsenceRequestForm() {
                           {field.value?.from ? (
                             field.value.to ? (
                               <>
-                                {format(field.value.from, 'LLL dd, y', { locale: ptBR })} -{' '}
-                                {format(field.value.to, 'LLL dd, y', { locale: ptBR })}
+                                {format(field.value.from, 'dd/MM/y', { locale: ptBR })} -{' '}
+                                {format(field.value.to, 'dd/MM/y', { locale: ptBR })}
                               </>
                             ) : (
-                              format(field.value.from, 'LLL dd, y', { locale: ptBR })
+                              format(field.value.from, 'dd/MM/y', { locale: ptBR })
                             )
                           ) : (
                             <span>Escolha uma data</span>
@@ -188,6 +227,7 @@ export default function AbsenceRequestForm() {
                         selected={field.value}
                         onSelect={field.onChange}
                         numberOfMonths={2}
+                        disabled={isSubmitPending}
                       />
                     </PopoverContent>
                   </Popover>
@@ -207,15 +247,16 @@ export default function AbsenceRequestForm() {
                       size="sm"
                       variant="ghost"
                       onClick={handleSuggestJustification}
-                      disabled={isPending}
+                      disabled={isAiPending || isSubmitPending}
                     >
                       <Sparkles className="mr-2 h-4 w-4" />
-                      {isPending ? 'Gerando...' : 'Sugestão da IA'}
+                      {isAiPending ? 'Gerando...' : 'Sugestão da IA'}
                     </Button>
                   </div>
                   <FormControl>
                     <Textarea
                       placeholder="Explique o motivo da sua ausência..."
+                      disabled={isSubmitPending}
                       {...field}
                     />
                   </FormControl>
@@ -227,7 +268,7 @@ export default function AbsenceRequestForm() {
                         <div
                           key={i}
                           className="text-sm p-3 bg-muted rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground"
-                          onClick={() => form.setValue('justification', s)}
+                          onClick={() => form.setValue('justification', s, { shouldValidate: true })}
                         >
                           {s}
                         </div>
@@ -238,20 +279,28 @@ export default function AbsenceRequestForm() {
               )}
             />
             <FormField
-              control={form.control}
-              name="attachment"
-              render={({ field }) => (
+                control={form.control}
+                name="attachment"
+                render={({ field: { onChange, value, ...rest } }) => (
                 <FormItem>
                   <FormLabel>Anexar Documento (Opcional)</FormLabel>
                   <FormControl>
-                    <Input type="file" onChange={(e) => field.onChange(e.target.files)} />
+                    <Input 
+                        type="file" 
+                        disabled={isSubmitPending}
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            onChange(file);
+                        }}
+                        {...rest}
+                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full">
-              Enviar Solicitação
+            <Button type="submit" className="w-full" disabled={isSubmitPending}>
+              {isSubmitPending ? 'Enviando...' : 'Enviar Solicitação'}
             </Button>
           </form>
         </Form>

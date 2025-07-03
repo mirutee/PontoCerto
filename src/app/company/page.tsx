@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -20,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Check, X, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -37,10 +36,17 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase/client';
 import { createEmployeeAction, updateEmployeeAction, toggleEmployeeStatusAction } from '@/app/actions/employee-actions';
+import { getAbsenceRequestsForCompany, updateAbsenceRequestStatus } from '@/app/actions/absence-actions';
 import type { Database } from '@/lib/supabase/models';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 type Employee = Database['public']['Tables']['funcionarios']['Row'];
 type Company = Database['public']['Tables']['empresas']['Row'];
+type AbsenceRequest = (Database['public']['Tables']['faltas_programadas']['Row'] & {
+  funcionarios: { nome: string | null; email: string | null } | null;
+});
+
 
 export default function CompanyPage() {
   const router = useRouter();
@@ -49,6 +55,8 @@ export default function CompanyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
+  const [absenceRequests, setAbsenceRequests] = useState<AbsenceRequest[]>([]);
+  const [isRequestsLoading, setIsRequestsLoading] = useState(true);
 
   const [isAddEmployeeDialogOpen, setIsAddEmployeeDialogOpen] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
@@ -112,9 +120,7 @@ export default function CompanyPage() {
         if (employeesError) {
           throw new Error('Não foi possível carregar os funcionários.');
         }
-
         setEmployees(employeesData || []);
-
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Erro ao carregar dados', description: error.message });
         router.push('/login');
@@ -124,6 +130,20 @@ export default function CompanyPage() {
     };
     fetchCompanyData();
   }, [router, toast]);
+  
+  useEffect(() => {
+    const fetchAbsenceRequests = async () => {
+        setIsRequestsLoading(true);
+        const result = await getAbsenceRequestsForCompany();
+        if (result.success && result.data) {
+            setAbsenceRequests(result.data as AbsenceRequest[]);
+        } else {
+            toast({ variant: 'destructive', title: 'Erro', description: result.message || 'Não foi possível buscar as solicitações.' });
+        }
+        setIsRequestsLoading(false);
+    };
+    fetchAbsenceRequests();
+  }, [toast]);
 
   const handleOpenEditDialog = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -162,7 +182,9 @@ export default function CompanyPage() {
       });
       
       if (!result) {
-        throw new Error('A comunicação com o servidor falhou. Por favor, recarregue a página e tente novamente.');
+        toast({ variant: 'destructive', title: 'Falha na Comunicação', description: 'Não foi possível contactar o servidor. Por favor, recarregue a página e tente novamente.' });
+        setIsSubmitting(false);
+        return;
       }
 
       if (result.success && result.employee) {
@@ -189,7 +211,10 @@ export default function CompanyPage() {
         });
 
         if (!result) {
-          throw new Error('A comunicação com o servidor falhou. Por favor, recarregue a página e tente novamente.');
+            toast({ variant: 'destructive', title: 'Falha na Comunicação', description: 'Não foi possível contactar o servidor. Por favor, recarregue a página e tente novamente.' });
+            setIsSubmitting(false);
+            setIsToggleStatusAlertOpen(false);
+            return;
         }
 
         if (result.success && result.employee) {
@@ -237,6 +262,19 @@ export default function CompanyPage() {
       setIsAddingEmployee(false);
     }
   };
+  
+  const handleAbsenceAction = async (requestId: number, newStatus: 'Aprovado' | 'Rejeitado') => {
+    const originalRequests = [...absenceRequests];
+    setAbsenceRequests(requests => requests.map(r => r.id === requestId ? {...r, status_aprovacao: newStatus} : r));
+
+    const result = await updateAbsenceRequestStatus(requestId, newStatus);
+    if (result.success) {
+        toast({ title: 'Sucesso!', description: result.message });
+    } else {
+        setAbsenceRequests(originalRequests);
+        toast({ variant: 'destructive', title: 'Erro', description: result.message });
+    }
+  };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
@@ -251,13 +289,24 @@ export default function CompanyPage() {
   const getStatusVariant = (status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (status) {
       case 'Ativo':
+      case 'Aprovado':
         return 'secondary';
       case 'Inativo':
+      case 'Rejeitado':
         return 'destructive';
+      case 'Pendente':
+        return 'default';
       default:
         return 'outline';
     }
   };
+  
+  const formatDateRange = (start: string, end: string | null) => {
+    const startDate = format(parseISO(start), "dd/MM/yyyy");
+    if (!end) return startDate;
+    const endDate = format(parseISO(end), "dd/MM/yyyy");
+    return `${startDate} - ${endDate}`;
+  }
 
   if (isLoading) {
     return (
@@ -369,8 +418,46 @@ export default function CompanyPage() {
                         Analise e aprove as justificativas e solicitações de folga dos funcionários.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="text-center text-muted-foreground p-12">
-                    <p>Nenhuma aprovação pendente no momento.</p>
+                <CardContent>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Funcionário</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Período</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                        {isRequestsLoading ? (
+                            <TableRow><TableCell colSpan={5} className="h-24 text-center">Carregando...</TableCell></TableRow>
+                        ) : absenceRequests.length > 0 ? (
+                            absenceRequests.map((request) => (
+                                <TableRow key={request.id}>
+                                    <TableCell>{request.funcionarios?.nome || 'N/A'}</TableCell>
+                                    <TableCell>{request.tipo}</TableCell>
+                                    <TableCell>{formatDateRange(request.data_inicio, request.data_fim)}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={getStatusVariant(request.status_aprovacao)}>{request.status_aprovacao}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {request.status_aprovacao === 'Pendente' ? (
+                                            <div className="flex gap-2">
+                                                <Button size="sm" variant="outline" onClick={() => handleAbsenceAction(request.id, 'Aprovado')}><Check className="h-4 w-4 mr-1"/> Aprovar</Button>
+                                                <Button size="sm" variant="destructive" onClick={() => handleAbsenceAction(request.id, 'Rejeitado')}><X className="h-4 w-4 mr-1"/> Rejeitar</Button>
+                                            </div>
+                                        ) : (
+                                            <span>Resolvido</span>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow><TableCell colSpan={5} className="h-24 text-center">Nenhuma solicitação de ausência encontrada.</TableCell></TableRow>
+                        )}
+                        </TableBody>
+                    </Table>
                 </CardContent>
             </Card>
         </TabsContent>
