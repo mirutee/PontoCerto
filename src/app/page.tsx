@@ -1,9 +1,12 @@
+'use client';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Check, Fingerprint } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/models';
+import { useEffect, useState } from 'react';
 
 type Plan = Database['public']['Tables']['planos']['Row'];
 
@@ -88,16 +91,24 @@ const getPlanFeatures = (planName: string | null) => {
   return features[planName || ''] || defaultFeatures;
 }
 
-export default async function LandingPage() {
+export default function LandingPage() {
+  const [plans, setPlans] = useState<Plan[]>([]);
   
-  const { data: plans, error } = await supabase
-    .from('planos')
-    .select('*')
-    .order('valor', { ascending: true, nullsFirst: false });
-  
-  if (error) {
-    console.error("Error fetching plans:", error);
-  }
+  useEffect(() => {
+    const fetchPlans = async () => {
+      const { data, error } = await supabase
+        .from('planos')
+        .select('*')
+        .order('valor', { ascending: true, nullsFirst: false });
+      
+      if (error) {
+        console.error("Error fetching plans:", error);
+      } else {
+        setPlans(data || []);
+      }
+    };
+    fetchPlans();
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -130,7 +141,7 @@ export default async function LandingPage() {
             </div>
             <div className="mt-6 flex justify-center">
                 <Button size="lg" asChild>
-                    <Link href="/signup">Contrate Agora</Link>
+                    <Link href="#pricing">Contrate Agora</Link>
                 </Button>
             </div>
           </div>
