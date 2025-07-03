@@ -160,13 +160,17 @@ export default function CompanyPage() {
         cargo: editEmployeeForm.cargo,
         cpf: editEmployeeForm.cpf,
       });
+      
+      if (!result) {
+        throw new Error('A comunicação com o servidor falhou. Por favor, recarregue a página e tente novamente.');
+      }
 
       if (result.success && result.employee) {
         setEmployees(prev => prev.map(e => e.id === result.employee!.id ? result.employee! : e));
         toast({ title: 'Sucesso!', description: result.message });
         setIsEditEmployeeDialogOpen(false);
       } else {
-        throw new Error(result.message || 'Erro desconhecido');
+        throw new Error(result.message || 'Ocorreu um erro ao atualizar o funcionário.');
       }
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: error.message });
@@ -183,11 +187,16 @@ export default function CompanyPage() {
             id: selectedEmployee.id,
             status: selectedEmployee.status as 'Ativo' | 'Inativo',
         });
+
+        if (!result) {
+          throw new Error('A comunicação com o servidor falhou. Por favor, recarregue a página e tente novamente.');
+        }
+
         if (result.success && result.employee) {
             setEmployees(prev => prev.map(e => e.id === result.employee!.id ? result.employee! : e));
             toast({ title: 'Status Alterado!', description: result.message });
         } else {
-            throw new Error(result.message || 'Erro desconhecido');
+            throw new Error(result.message || 'Ocorreu um erro ao alterar o status.');
         }
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Erro ao Alterar Status', description: error.message });
