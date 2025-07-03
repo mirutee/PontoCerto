@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -126,6 +127,7 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
             .eq('id', id);
         
         if (userError) {
+            // This is not a fatal error, but should be logged. The main employee data was updated.
             console.error(`Inconsistência: falha ao atualizar nome/cpf na tabela de usuários para o ID ${id}`);
         }
 

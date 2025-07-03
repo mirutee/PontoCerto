@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -124,22 +125,24 @@ export default function CompanyPage() {
     fetchCompanyData();
   }, [router, toast]);
 
-  const handleOpenEditDialog = async (employee: Employee) => {
+  const handleOpenEditDialog = (employee: Employee) => {
     setSelectedEmployee(employee);
-    try {
-        const { data: userData, error } = await supabase.from('usuarios').select('cnpj').eq('id', employee.id).single();
-        if (error && error.code !== 'PGRST116') { // Ignore "not found" error
-            throw new Error('Não foi possível buscar os dados do funcionário.');
+    setEditEmployeeForm({
+      name: employee.nome || '',
+      cargo: employee.cargo || '',
+      cpf: 'Carregando...'
+    });
+    setIsEditEmployeeDialogOpen(true);
+
+    supabase.from('usuarios').select('cnpj').eq('id', employee.id).single()
+      .then(({ data, error }) => {
+        if (error && error.code !== 'PGRST116') {
+           toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível carregar o CPF do funcionário.' });
+           setEditEmployeeForm(prev => ({...prev, cpf: 'Erro ao carregar'}));
+        } else if (data) {
+           setEditEmployeeForm(prev => ({...prev, cpf: data.cnpj || ''}));
         }
-        setEditEmployeeForm({
-          name: employee.nome || '',
-          cargo: employee.cargo || '',
-          cpf: userData?.cnpj || ''
-        });
-        setIsEditEmployeeDialogOpen(true);
-    } catch(err: any) {
-        toast({ variant: 'destructive', title: 'Erro', description: err.message });
-    }
+    });
   };
   
   const handleOpenToggleStatusAlert = (employee: Employee) => {
