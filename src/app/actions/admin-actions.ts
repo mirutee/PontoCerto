@@ -24,8 +24,8 @@ export async function inviteCompanyAction(input: z.infer<typeof inviteCompanySch
   const { newCompanyName, newCompanyCnpj, newCompanyPlanId, newCompanyEmail } = validation.data;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!siteUrl || siteUrl.includes('<SUA-URL-AQUI>')) {
-    return { success: false, error: 'A variável de ambiente NEXT_PUBLIC_SITE_URL não está configurada no servidor. O convite não pode ser enviado.' };
+  if (!siteUrl) {
+    return { success: false, error: 'A variável de ambiente NEXT_PUBLIC_SITE_URL não está configurada. O convite não pode ser enviado. Adicione-a nas configurações do ambiente de produção.' };
   }
 
   try {

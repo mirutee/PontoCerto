@@ -1,0 +1,100 @@
+📱 INÍCIO (Tela Inicial)
+│
+├── Exibe nome do App, planos de assinatura e opções:
+│     ├── Planos mensais (3 a 30 funcionários + personalizado)
+│     └── Botões: [Entrar] | [Cadastrar]
+│
+├──► CADASTRO DA EMPRESA
+│     ├── Campos obrigatórios:
+│     │     ├── CPF ou CNPJ (validação automática)
+│     │     ├── E-mail
+│     │     └── Senha
+│     ├── Integração com Stripe para pagamento
+│     └── Acesso será liberado pelo painel master gerencial das empresas.
+│
+├──► LOGIN
+│     ├── Login da Empresa
+│     │     └── CPF ou CNPJ + Senha → Painel da Empresa
+│     ├── Login do Funcionário
+│     │     └── E-mail + Senha + [☑️ Lembrar-me] → Tela Simples de Ponto
+│     └── Login do Administrador Master
+│           └── E-mail + Senha → Painel de Administração
+│
+├──► FUNCIONÁRIO (Interface Simples)
+│     ├── Campos salvos no banco:
+│     │     ├── Nome
+│     │     ├── E-mail
+│     │     └── Número de WhatsApp 📲
+│     │
+│     ├── 🔘 Botão "Registrar Chegada"
+│     │     ├── Texto verde e seta ↑
+│     │     └── Campo opcional para observações
+│     │
+│     ├── Após o clique:
+│     │     └── Botão vira "Registrar Saída" em vermelho
+│     │           ├── Ícone de porta ou seta diagonal pra direita ↓
+│     │           └── Campo opcional de justificativa
+│     │
+│     ├── Registro de Falta Antecipada
+│     │     ├── Escolhe data futura (a partir de hoje)
+│     │     ├── Campo de texto para justificativa
+│     │     ├── Upload de documento
+│     │     └── Botão [Enviar]
+│     │
+│     ├── 🔁 Justificativas Padrão (AutoTexto)
+│     │     ├── Sugestões automáticas de texto
+│     │     └── Envio de justificativa também via WhatsApp
+│     │
+│     ├── 📩 Resumo Diário Automático (Item 2)
+│     │     ├── Enviado por WhatsApp ao final do expediente
+│     │     └── Inclui horários, status de faltas e lembretes
+│     │
+│     ├── 📅 Calendário de Ocorrências (Item 5)
+│     │     ├── Visual com ícones de presença, falta e atrasos
+│     │     └── Atualizado em tempo real com registros
+│     │
+│     ├── 📂 Central de Documentos (Item 6)
+│     │     ├── Histórico de justificativas aprovadas
+│     │     └── Anexos e feedbacks acessíveis
+│     │
+│     ├── 📈 Gráfico de Produtividade (Item 9)
+│     │     ├── Dias trabalhados, faltas e horas extras
+│     │     └── Exibido em barras ou pizza
+│     │
+│     └── 📍 Registro com Geolocalização (Item 10)
+│           ├── No celular, registra ponto com coordenada
+│           └── Exibição no painel ou mapa simples
+│
+├──► EMPRESA (Painel Administrativo da Empresa)
+│     ├── Gestão de jornada, banco de horas, feriados
+│     ├── Aprovação de justificativas
+│     ├── Relatórios mensais exportáveis (PDF/Excel)
+│     └── Notificações automáticas sobre:
+│           ├── Falta de registros
+│           ├── Volume de horas extras
+│           └── Funcionários pendentes
+│
+└──► ADMINISTRADOR MASTER (Você)
+      ├── Painel de Gestão de Empresas
+      │     ├── Visualiza dados básicos da empresa:
+      │     │     ├── Nome, CPF/CNPJ
+      │     │     ├── Plano contratado
+      │     │     └── Status de pagamento via Stripe
+      │
+      │     ├── Ações permitidas:
+      │     │     ├── Alterar plano manualmente
+      │     │     ├── Revogar acesso
+      │     │     └── Editar vigência de plano
+      │
+      ├── 🔔 Notificação de Expiração de Plano (Item 7)
+      │     ├── Envio automático via WhatsApp e e-mail
+      │     └── Sugestão de upgrade com link Stripe
+      │
+      └── Segurança:
+            └── Sem acesso a dados de funcionários ou ponto registrado
+
+
+
+
+
+
