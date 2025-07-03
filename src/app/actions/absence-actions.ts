@@ -87,44 +87,6 @@ export async function createAbsenceRequestAction(formData: FormData) {
   }
 }
 
-export async function getAbsenceRequestsForCompany() {
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Usuário não autenticado.");
-
-        const { data: companyUser, error: companyUserError } = await supabase
-            .from('usuarios')
-            .select('cnpj')
-            .eq('id', session.user.id)
-            .eq('tipo', 'empresa')
-            .single();
-        if (companyUserError || !companyUser) throw new Error("Perfil da empresa não encontrado.");
-        
-        const { data: company, error: companyError } = await supabase
-            .from('empresas')
-            .select('id')
-            .eq('cnpj', companyUser.cnpj!)
-            .single();
-        if(companyError || !company) throw new Error("Empresa não encontrada.");
-
-        const { data, error } = await supabase
-            .from('faltas_programadas')
-            .select(`
-                *,
-                funcionarios (nome, email)
-            `)
-            .eq('empresa_id', company.id)
-            .order('criado_em', { ascending: false });
-
-        if (error) throw new Error(`Falha ao buscar solicitações: ${error.message}`);
-        
-        return { success: true, data };
-
-    } catch (error: any) {
-        return { success: false, message: error.message };
-    }
-}
-
 export async function getAbsenceRequestsForEmployee() {
     try {
         const { data: { session } } = await supabase.auth.getSession();

@@ -36,7 +36,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase/client';
 import { createEmployeeAction, updateEmployeeAction, toggleEmployeeStatusAction } from '@/app/actions/employee-actions';
-import { getAbsenceRequestsForCompany, updateAbsenceRequestStatus } from '@/app/actions/absence-actions';
+import { updateAbsenceRequestStatus } from '@/app/actions/absence-actions';
 import type { Database } from '@/lib/supabase/models';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -74,8 +74,10 @@ export default function CompanyPage() {
 
 
   useEffect(() => {
-    const fetchCompanyData = async () => {
+    const fetchAllData = async () => {
       setIsLoading(true);
+      setIsRequestsLoading(true);
+      
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
@@ -83,7 +85,6 @@ export default function CompanyPage() {
         router.push('/login');
         return;
       }
-
       const userId = session.user.id;
       
       try {
@@ -112,38 +113,34 @@ export default function CompanyPage() {
         }
         setCompany(companyData);
 
-        const { data: employeesData, error: employeesError } = await supabase
-          .from('funcionarios')
-          .select('*')
-          .eq('empresa_id', companyData.id);
+        const [employeesRes, requestsRes] = await Promise.all([
+            supabase
+                .from('funcionarios')
+                .select('*')
+                .eq('empresa_id', companyData.id),
+            supabase
+                .from('faltas_programadas')
+                .select(`*, funcionarios (nome, email)`)
+                .eq('empresa_id', companyData.id)
+                .order('criado_em', { ascending: false })
+        ]);
+        
+        if (employeesRes.error) throw new Error('Não foi possível carregar os funcionários.');
+        setEmployees(employeesRes.data || []);
+        
+        if (requestsRes.error) throw new Error(`Falha ao buscar solicitações: ${requestsRes.error.message}`);
+        setAbsenceRequests(requestsRes.data as AbsenceRequest[] || []);
 
-        if (employeesError) {
-          throw new Error('Não foi possível carregar os funcionários.');
-        }
-        setEmployees(employeesData || []);
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Erro ao carregar dados', description: error.message });
         router.push('/login');
       } finally {
         setIsLoading(false);
+        setIsRequestsLoading(false);
       }
     };
-    fetchCompanyData();
+    fetchAllData();
   }, [router, toast]);
-  
-  useEffect(() => {
-    const fetchAbsenceRequests = async () => {
-        setIsRequestsLoading(true);
-        const result = await getAbsenceRequestsForCompany();
-        if (result.success && result.data) {
-            setAbsenceRequests(result.data as AbsenceRequest[]);
-        } else {
-            toast({ variant: 'destructive', title: 'Erro', description: result.message || 'Não foi possível buscar as solicitações.' });
-        }
-        setIsRequestsLoading(false);
-    };
-    fetchAbsenceRequests();
-  }, [toast]);
 
   const handleOpenEditDialog = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -210,8 +207,8 @@ export default function CompanyPage() {
             status: selectedEmployee.status as 'Ativo' | 'Inativo',
         });
 
-        if (!result) {
-            toast({ variant: 'destructive', title: 'Falha na Comunicação', description: 'Não foi possível contactar o servidor. Por favor, recarregue a página e tente novamente.' });
+        if (!result || typeof result.success === 'undefined') {
+            toast({ variant: 'destructive', title: 'Falha na Comunicação', description: 'A resposta do servidor foi inválida. Por favor, recarregue a página e tente novamente.' });
             setIsSubmitting(false);
             setIsToggleStatusAlertOpen(false);
             return;
@@ -302,9 +299,9 @@ export default function CompanyPage() {
   };
   
   const formatDateRange = (start: string, end: string | null) => {
-    const startDate = format(parseISO(start), "dd/MM/yyyy");
+    const startDate = format(parseISO(start), "dd/MM/yyyy", { locale: ptBR });
     if (!end) return startDate;
-    const endDate = format(parseISO(end), "dd/MM/yyyy");
+    const endDate = format(parseISO(end), "dd/MM/yyyy", { locale: ptBR });
     return `${startDate} - ${endDate}`;
   }
 
