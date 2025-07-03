@@ -33,7 +33,7 @@ export async function inviteCompanyAction(input: z.infer<typeof inviteCompanySch
       newCompanyEmail,
       { 
         data: { full_name: newCompanyName },
-        redirectTo: `${siteUrl}/login`
+        redirectTo: `${siteUrl}/update-password`
       }
     );
 

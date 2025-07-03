@@ -15,7 +15,7 @@ const titles: { [key: string]: string } = {
   '/company': 'Painel da Empresa',
 };
 
-const noLayoutRoutes = ['/', '/login', '/signup'];
+const noLayoutRoutes = ['/', '/login', '/signup', '/update-password'];
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
