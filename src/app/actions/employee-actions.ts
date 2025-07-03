@@ -14,6 +14,19 @@ const createEmployeeSchema = z.object({
   password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.'),
 });
 
+const updateEmployeeSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1, 'Nome do funcionário é obrigatório.'),
+  cargo: z.string().min(1, 'Cargo é obrigatório.'),
+  cpf: z.string().min(1, 'CPF é obrigatório.'),
+});
+
+const toggleEmployeeStatusSchema = z.object({
+    id: z.string().uuid(),
+    status: z.enum(['Ativo', 'Inativo']),
+});
+
+
 export async function createEmployeeAction(input: z.infer<typeof createEmployeeSchema>) {
   const validation = createEmployeeSchema.safeParse(input);
   if (!validation.success) {
@@ -87,4 +100,61 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
   } catch (error: any) {
     return { success: false, message: error.message };
   }
+}
+
+export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeSchema>) {
+    const validation = updateEmployeeSchema.safeParse(input);
+    if (!validation.success) {
+        const firstError = Object.values(validation.error.flatten().fieldErrors).flat()[0] || 'Erro de validação.';
+        return { success: false, message: firstError };
+    }
+    const { id, name, cargo, cpf } = validation.data;
+
+    try {
+        const { data: employeeData, error: employeeError } = await supabase
+            .from('funcionarios')
+            .update({ nome: name, cargo: cargo })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (employeeError) throw new Error(`Falha ao atualizar dados do funcionário: ${employeeError.message}`);
+
+        const { error: userError } = await supabase
+            .from('usuarios')
+            .update({ nome: name, cnpj: cpf }) // Storing CPF in 'cnpj' field
+            .eq('id', id);
+        
+        if (userError) {
+            console.error(`Inconsistência: falha ao atualizar nome/cpf na tabela de usuários para o ID ${id}`);
+        }
+
+        return { success: true, message: 'Funcionário atualizado com sucesso!', employee: employeeData };
+    } catch (error: any) {
+        return { success: false, message: error.message };
+    }
+}
+
+export async function toggleEmployeeStatusAction(input: z.infer<typeof toggleEmployeeStatusSchema>) {
+    const validation = toggleEmployeeStatusSchema.safeParse(input);
+    if (!validation.success) {
+        return { success: false, message: 'Erro de validação de dados.' };
+    }
+    const { id, status } = validation.data;
+    const newStatus = status === 'Ativo' ? 'Inativo' : 'Ativo';
+
+    try {
+        const { data: employeeData, error } = await supabase
+            .from('funcionarios')
+            .update({ status: newStatus })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw new Error(`Falha ao alterar o status do funcionário: ${error.message}`);
+        
+        return { success: true, message: `Status do funcionário alterado para ${newStatus}.`, employee: employeeData };
+    } catch (error: any) {
+        return { success: false, message: error.message };
+    }
 }

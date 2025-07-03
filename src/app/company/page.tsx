@@ -30,15 +30,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase/client';
-import { createEmployeeAction } from '@/app/actions/employee-actions';
+import { createEmployeeAction, updateEmployeeAction, toggleEmployeeStatusAction } from '@/app/actions/employee-actions';
 import type { Database } from '@/lib/supabase/models';
 
 type Employee = Database['public']['Tables']['funcionarios']['Row'];
 type Company = Database['public']['Tables']['empresas']['Row'];
+type User = Database['public']['Tables']['usuarios']['Row'];
 
 export default function CompanyPage() {
   const router = useRouter();
@@ -51,12 +53,17 @@ export default function CompanyPage() {
   const [isAddEmployeeDialogOpen, setIsAddEmployeeDialogOpen] = useState(false);
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [newEmployeeForm, setNewEmployeeForm] = useState({
-    name: '',
-    email: '',
-    cpf: '',
-    cargo: '',
-    password: ''
+    name: '', email: '', cpf: '', cargo: '', password: ''
   });
+
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [isEditEmployeeDialogOpen, setIsEditEmployeeDialogOpen] = useState(false);
+  const [isToggleStatusAlertOpen, setIsToggleStatusAlertOpen] = useState(false);
+  const [editEmployeeForm, setEditEmployeeForm] = useState({
+    name: '', cargo: '', cpf: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
   useEffect(() => {
     const fetchCompanyData = async () => {
@@ -118,6 +125,72 @@ export default function CompanyPage() {
     fetchCompanyData();
   }, [router, toast]);
 
+  const handleOpenEditDialog = async (employee: Employee) => {
+    setSelectedEmployee(employee);
+    
+    // Fetch the CPF from the usuarios table as it's not in funcionarios table
+    const { data: userData, error } = await supabase.from('usuarios').select('cnpj').eq('id', employee.id).single();
+    
+    setEditEmployeeForm({
+      name: employee.nome || '',
+      cargo: employee.cargo || '',
+      cpf: userData?.cnpj || ''
+    });
+    setIsEditEmployeeDialogOpen(true);
+  };
+  
+  const handleOpenToggleStatusAlert = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    setIsToggleStatusAlertOpen(true);
+  };
+
+  const handleUpdateEmployee = async () => {
+    if (!selectedEmployee) return;
+    setIsSubmitting(true);
+    try {
+      const result = await updateEmployeeAction({
+        id: selectedEmployee.id,
+        name: editEmployeeForm.name,
+        cargo: editEmployeeForm.cargo,
+        cpf: editEmployeeForm.cpf,
+      });
+
+      if (result.success && result.employee) {
+        setEmployees(prev => prev.map(e => e.id === result.employee!.id ? result.employee! : e));
+        toast({ title: 'Sucesso!', description: result.message });
+        setIsEditEmployeeDialogOpen(false);
+      } else {
+        throw new Error(result.message || 'Erro desconhecido');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Erro ao Atualizar', description: error.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleEmployeeStatus = async () => {
+    if (!selectedEmployee || !selectedEmployee.status) return;
+    setIsSubmitting(true);
+    try {
+        const result = await toggleEmployeeStatusAction({
+            id: selectedEmployee.id,
+            status: selectedEmployee.status as 'Ativo' | 'Inativo',
+        });
+        if (result.success && result.employee) {
+            setEmployees(prev => prev.map(e => e.id === result.employee!.id ? result.employee! : e));
+            toast({ title: 'Status Alterado!', description: result.message });
+        } else {
+            throw new Error(result.message || 'Erro desconhecido');
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Erro ao Alterar Status', description: error.message });
+    } finally {
+        setIsSubmitting(false);
+        setIsToggleStatusAlertOpen(false);
+    }
+  };
+
 
   const handleAddEmployee = async () => {
     if (!company) {
@@ -153,6 +226,11 @@ export default function CompanyPage() {
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     setNewEmployeeForm(prev => ({ ...prev, [id]: value }));
+  }
+  
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setEditEmployeeForm(prev => ({...prev, [id]: value }));
   }
 
   const getStatusVariant = (status: string | null): 'default' | 'secondary' | 'destructive' | 'outline' => {
@@ -247,8 +325,10 @@ export default function CompanyPage() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                    <DropdownMenuItem>Editar</DropdownMenuItem>
-                                    <DropdownMenuItem>Desativar</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => handleOpenEditDialog(employee)}>Editar</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => handleOpenToggleStatusAlert(employee)} className={employee.status === 'Ativo' ? 'text-destructive' : ''}>
+                                      {employee.status === 'Ativo' ? 'Desativar' : 'Ativar'}
+                                    </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                                 </TableCell>
@@ -286,7 +366,7 @@ export default function CompanyPage() {
                     <CardDescription>
                         Defina jornadas de trabalho, banco de horas e feriados para sua equipe.
                     </CardDescription>
-                </CardHeader>
+                </Header>
                 <CardContent className="text-center text-muted-foreground p-12">
                     <p>Funcionalidade em desenvolvimento.</p>
                 </CardContent>
@@ -294,6 +374,7 @@ export default function CompanyPage() {
         </TabsContent>
     </Tabs>
 
+    {/* Add Employee Dialog */}
     <Dialog open={isAddEmployeeDialogOpen} onOpenChange={setIsAddEmployeeDialogOpen}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
@@ -334,6 +415,63 @@ export default function CompanyPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Edit Employee Dialog */}
+    <Dialog open={isEditEmployeeDialogOpen} onOpenChange={setIsEditEmployeeDialogOpen}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Editar Funcionário</DialogTitle>
+          <DialogDescription>
+            Altere os dados cadastrais do funcionário. O email não pode ser alterado.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">Nome</Label>
+            <Input id="name" value={editEmployeeForm.name} onChange={handleEditFormChange} className="col-span-3" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="cpf" className="text-right">CPF</Label>
+            <Input id="cpf" value={editEmployeeForm.cpf} onChange={handleEditFormChange} className="col-span-3" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="cargo" className="text-right">Cargo</Label>
+            <Input id="cargo" value={editEmployeeForm.cargo} onChange={handleEditFormChange} className="col-span-3" />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancelar</Button>
+          </DialogClose>
+          <Button onClick={handleUpdateEmployee} disabled={isSubmitting}>
+            {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    
+    {/* Deactivate/Activate Alert Dialog */}
+    <AlertDialog open={isToggleStatusAlertOpen} onOpenChange={setIsToggleStatusAlertOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Esta ação irá {selectedEmployee?.status === 'Ativo' ? 'desativar' : 'ativar'} o funcionário "{selectedEmployee?.nome}". 
+                    {selectedEmployee?.status === 'Ativo' ? ' Ele não poderá mais acessar o sistema.' : ' Ele poderá voltar a acessar o sistema.'}
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleToggleEmployeeStatus} 
+                  disabled={isSubmitting}
+                  className={selectedEmployee?.status === 'Ativo' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+                >
+                   {isSubmitting ? 'Alterando...' : `Sim, ${selectedEmployee?.status === 'Ativo' ? 'desativar' : 'ativar'}`}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
