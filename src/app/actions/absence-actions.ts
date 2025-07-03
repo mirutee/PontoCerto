@@ -123,3 +123,5 @@ export async function updateAbsenceRequestStatus(requestId: number, newStatus: '
         return { success: false, message: error.message };
     }
 }
+
+    
