@@ -372,7 +372,7 @@ export default function CompanyPage() {
                     <CardDescription>
                         Defina jornadas de trabalho, banco de horas e feriados para sua equipe.
                     </CardDescription>
-                </Header>
+                </CardHeader>
                 <CardContent className="text-center text-muted-foreground p-12">
                     <p>Funcionalidade em desenvolvimento.</p>
                 </CardContent>

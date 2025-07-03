@@ -128,6 +128,11 @@ export default async function LandingPage() {
                 PontoCerto é a solução completa para registro de ponto, gestão de ausências e relatórios. Simplifique seus processos de RH e foque no que realmente importa.
               </p>
             </div>
+            <div className="mt-6 flex justify-center">
+                <Button size="lg" asChild>
+                    <Link href="/signup">Contrate Agora</Link>
+                </Button>
+            </div>
           </div>
         </section>
         <section id="features" className="w-full py-12 md:py-24 lg:py-32">
