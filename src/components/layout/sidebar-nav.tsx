@@ -24,6 +24,12 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase/client';
+
+type UserProfile = {
+  name: string;
+  email: string;
+};
 
 const employeeLinks = [
   { href: '/dashboard', label: 'Meu Painel', icon: LayoutDashboard },
@@ -45,13 +51,30 @@ const adminLinks = [
 export default function SidebarNav() {
   const pathname = usePathname();
   const [role, setRole] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     // This effect runs on the client after the component mounts
     // to prevent hydration mismatch errors.
     const userRole = sessionStorage.getItem('userRole');
     setRole(userRole);
-  }, []);
+
+    const fetchUserProfile = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            const { data: profile } = await supabase
+                .from('usuarios')
+                .select('nome, email')
+                .eq('id', session.user.id)
+                .single();
+            if (profile) {
+                setUserProfile({ name: profile.nome || '', email: profile.email || '' });
+            }
+        }
+    };
+    fetchUserProfile();
+    
+  }, [pathname]); // Re-fetch on navigation to ensure data is fresh
 
   // Don't render anything until the role is determined on the client
   // to avoid showing the wrong navigation links.
@@ -115,13 +138,13 @@ export default function SidebarNav() {
                   data-ai-hint="person portrait"
                 />
                 <AvatarFallback>
-                  <User />
+                  {userProfile ? userProfile.name.substring(0, 2).toUpperCase() : <User />}
                 </AvatarFallback>
               </Avatar>
               <span className="flex flex-col text-left">
-                <span className="font-semibold">Usuário Logado</span>
+                <span className="font-semibold">{userProfile ? userProfile.name : 'Carregando...'}</span>
                 <span className="text-xs text-muted-foreground">
-                  usuario@pontocerto.com
+                  {userProfile ? userProfile.email : '...'}
                 </span>
               </span>
             </SidebarMenuButton>

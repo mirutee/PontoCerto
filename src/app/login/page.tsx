@@ -114,12 +114,18 @@ export default function LoginPage() {
       // Final check to ensure user is an employee and get company details
       const { data: employeeRecord, error: employeeError } = await supabase
         .from('funcionarios')
-        .select('*, empresas(status_pagamento)')
+        .select('status, empresas(status_pagamento)')
         .eq('id', user.id)
         .single();
       
       if (employeeError || !employeeRecord) {
-        toast({ variant: 'destructive', title: 'Acesso Negado', description: 'Este usuário não está registrado como um funcionário ativo.' });
+        toast({ variant: 'destructive', title: 'Acesso Negado', description: 'Este usuário não está registrado como um funcionário.' });
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (employeeRecord.status === 'Inativo') {
+        toast({ variant: 'destructive', title: 'Conta Desativada', description: 'Seu acesso foi desativado pelo administrador da empresa.' });
         await supabase.auth.signOut();
         return;
       }
