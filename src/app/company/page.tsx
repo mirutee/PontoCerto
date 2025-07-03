@@ -331,8 +331,8 @@ export default function CompanyPage() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                     <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                    <DropdownMenuItem onSelect={() => handleOpenEditDialog(employee)}>Editar</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => handleOpenToggleStatusAlert(employee)} className={employee.status === 'Ativo' ? 'text-destructive' : ''}>
+                                    <DropdownMenuItem onClick={() => handleOpenEditDialog(employee)}>Editar</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleOpenToggleStatusAlert(employee)} className={employee.status === 'Ativo' ? 'text-destructive' : ''}>
                                       {employee.status === 'Ativo' ? 'Desativar' : 'Ativar'}
                                     </DropdownMenuItem>
                                     </DropdownMenuContent>
