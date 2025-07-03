@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -40,7 +40,6 @@ import type { Database } from '@/lib/supabase/models';
 
 type Employee = Database['public']['Tables']['funcionarios']['Row'];
 type Company = Database['public']['Tables']['empresas']['Row'];
-type User = Database['public']['Tables']['usuarios']['Row'];
 
 export default function CompanyPage() {
   const router = useRouter();
@@ -127,16 +126,20 @@ export default function CompanyPage() {
 
   const handleOpenEditDialog = async (employee: Employee) => {
     setSelectedEmployee(employee);
-    
-    // Fetch the CPF from the usuarios table as it's not in funcionarios table
-    const { data: userData, error } = await supabase.from('usuarios').select('cnpj').eq('id', employee.id).single();
-    
-    setEditEmployeeForm({
-      name: employee.nome || '',
-      cargo: employee.cargo || '',
-      cpf: userData?.cnpj || ''
-    });
-    setIsEditEmployeeDialogOpen(true);
+    try {
+        const { data: userData, error } = await supabase.from('usuarios').select('cnpj').eq('id', employee.id).single();
+        if (error && error.code !== 'PGRST116') { // Ignore "not found" error
+            throw new Error('Não foi possível buscar os dados do funcionário.');
+        }
+        setEditEmployeeForm({
+          name: employee.nome || '',
+          cargo: employee.cargo || '',
+          cpf: userData?.cnpj || ''
+        });
+        setIsEditEmployeeDialogOpen(true);
+    } catch(err: any) {
+        toast({ variant: 'destructive', title: 'Erro', description: err.message });
+    }
   };
   
   const handleOpenToggleStatusAlert = (employee: Employee) => {
