@@ -91,23 +91,19 @@ export default function AbsenceRequestForm({ onNewRequest }: { onNewRequest: (re
 
         const result = await createAbsenceRequestAction(formData);
 
-        if (result.success) {
+        if (result.success && result.data) {
             toast({
                 title: 'Solicitação Enviada',
                 description: result.message,
             });
             form.reset();
             setSuggestions([]);
-            // This is a way to update the parent component's list without a full refresh
-            // But since the action returns void, we can't pass the new request.
-            // A full page reload or re-fetch in the parent is an alternative.
-            // For now, we assume the parent will re-fetch.
-            window.location.reload(); // Simple solution for now
+            onNewRequest(result.data);
         } else {
             toast({
                 variant: 'destructive',
                 title: 'Erro ao Enviar',
-                description: result.message,
+                description: result.message || 'Ocorreu um erro desconhecido.',
             });
         }
     });
