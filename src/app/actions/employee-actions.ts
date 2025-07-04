@@ -3,7 +3,8 @@
 
 import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabase } from '@/lib/supabase/client';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 import type { Database } from '@/lib/supabase/models';
 
 const createEmployeeSchema = z.object({
@@ -39,11 +40,10 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
   const { companyId, name, email, cpf, cargo, password } = validation.data;
 
   try {
-    // 1. Create the user in Supabase Auth
     const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
-      email_confirm: true, // Auto-confirm email since the company is creating the account
+      email_confirm: true,
       user_metadata: {
         full_name: name,
       },
@@ -59,8 +59,7 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
     
     const userId = user.id;
 
-    // 2. Create the user profile in 'usuarios' table
-    const { error: profileError } = await supabase.from('usuarios').insert({
+    const { error: profileError } = await supabaseAdmin.from('usuarios').insert({
       id: userId,
       nome: name,
       email: email,
@@ -69,12 +68,10 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
     });
 
     if (profileError) {
-      // Rollback: delete the auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(`Falha ao criar perfil de usuário: ${profileError.message}`);
     }
 
-    // 3. Create the employee record in 'funcionarios' table
     const newEmployeeData: Database['public']['Tables']['funcionarios']['Insert'] = {
         id: userId,
         empresa_id: companyId,
@@ -84,14 +81,13 @@ export async function createEmployeeAction(input: z.infer<typeof createEmployeeS
         status: 'Ativo',
     };
 
-    const { data: employeeData, error: employeeError } = await supabase
+    const { data: employeeData, error: employeeError } = await supabaseAdmin
       .from('funcionarios')
       .insert(newEmployeeData)
       .select()
       .single();
 
     if (employeeError) {
-      // Rollback: delete auth user
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(`Falha ao criar registro do funcionário: ${employeeError.message}`);
     }
@@ -110,6 +106,9 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
         return { success: false, message: firstError };
     }
     const { id, name, cargo, cpf } = validation.data;
+    
+    const cookieStore = cookies();
+    const supabase = createSupabaseServerClient(cookieStore);
 
     try {
         const { data: employeeData, error: employeeError } = await supabase
@@ -127,7 +126,6 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
             .eq('id', id);
         
         if (userError) {
-            // This is not a fatal error, but should be logged. The main employee data was updated.
             console.error(`Inconsistência: falha ao atualizar nome/cpf na tabela de usuários para o ID ${id}`);
         }
 
@@ -144,6 +142,9 @@ export async function toggleEmployeeStatusAction(input: z.infer<typeof toggleEmp
     }
     const { id, status } = validation.data;
     const newStatus = status === 'Ativo' ? 'Inativo' : 'Ativo';
+
+    const cookieStore = cookies();
+    const supabase = createSupabaseServerClient(cookieStore);
 
     try {
         const { data: employeeData, error } = await supabase

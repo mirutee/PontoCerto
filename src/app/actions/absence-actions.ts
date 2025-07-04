@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import type { Database } from '@/lib/supabase/models';
+import { cookies } from 'next/headers';
 
 type AbsenceRequest = Database['public']['Tables']['faltas_programadas']['Row'];
 
@@ -20,7 +21,8 @@ export async function createAbsenceRequestAction(formData: FormData): Promise<{
     message: string;
     data?: AbsenceRequest;
 }> {
-  const supabase = createSupabaseServerClient();
+  const cookieStore = cookies();
+  const supabase = createSupabaseServerClient(cookieStore);
   const attachmentFile = formData.get('attachment');
   
   const rawData = {
@@ -99,7 +101,8 @@ export async function createAbsenceRequestAction(formData: FormData): Promise<{
 }
 
 export async function updateAbsenceRequestStatus(requestId: number, newStatus: 'Aprovado' | 'Rejeitado') {
-    const supabase = createSupabaseServerClient();
+    const cookieStore = cookies();
+    const supabase = createSupabaseServerClient(cookieStore);
     try {
         const { error } = await supabase
             .from('faltas_programadas')

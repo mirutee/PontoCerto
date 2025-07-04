@@ -2,7 +2,6 @@
 
 import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/models';
 import { format, addMonths } from 'date-fns';
 
@@ -49,7 +48,7 @@ export async function inviteCompanyAction(input: z.infer<typeof inviteCompanySch
     }
     const userId = user.id;
     
-    const { error: profileError } = await supabase.from('usuarios').insert({
+    const { error: profileError } = await supabaseAdmin.from('usuarios').insert({
       id: userId,
       nome: newCompanyName,
       email: newCompanyEmail,
@@ -58,7 +57,6 @@ export async function inviteCompanyAction(input: z.infer<typeof inviteCompanySch
     });
 
     if (profileError) {
-      // If creating the profile fails, we should delete the auth user to avoid orphans.
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(`Falha ao criar perfil de usuário: ${profileError.message}`);
     }
@@ -71,24 +69,20 @@ export async function inviteCompanyAction(input: z.infer<typeof inviteCompanySch
       vigencia: format(addMonths(new Date(), 1), 'yyyy-MM-dd')
     };
 
-    const { data: companyData, error: companyError } = await supabase
+    const { data: companyData, error: companyError } = await supabaseAdmin
       .from('empresas')
       .insert(newCompanyData)
       .select()
       .single();
 
     if (companyError) {
-      // If creating the company fails, delete the auth user and profile
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      // The profile might cascade delete, but an explicit delete is safer.
-      // We don't have a direct way to delete profile here without its id, but user deletion should be enough.
       throw new Error(`Falha ao criar empresa: ${companyError.message}`);
     }
     
     return { success: true, message: `Um e-mail de convite foi enviado para ${newCompanyEmail}.`, company: companyData };
 
   } catch (error: any) {
-    // This will catch any thrown errors from the try block
     return { success: false, error: error.message };
   }
 }
