@@ -111,6 +111,11 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
     const supabase = createSupabaseServerClient(cookieStore);
 
     try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+            throw new Error('Usuário não autenticado.');
+        }
+
         const { data: employeeData, error: employeeError } = await supabase
             .from('funcionarios')
             .update({ nome: name, cargo: cargo })
@@ -147,6 +152,11 @@ export async function toggleEmployeeStatusAction(input: z.infer<typeof toggleEmp
     const supabase = createSupabaseServerClient(cookieStore);
 
     try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+            throw new Error('Usuário não autenticado.');
+        }
+
         const { data: employeeData, error } = await supabase
             .from('funcionarios')
             .update({ status: newStatus })
