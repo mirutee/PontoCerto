@@ -87,27 +87,6 @@ export async function createAbsenceRequestAction(formData: FormData) {
   }
 }
 
-export async function getAbsenceRequestsForEmployee() {
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Usuário não autenticado.");
-        const userId = session.user.id;
-
-        const { data, error } = await supabase
-            .from('faltas_programadas')
-            .select('*')
-            .eq('funcionario_id', userId)
-            .order('criado_em', { ascending: false });
-
-        if (error) throw new Error(`Falha ao buscar solicitações: ${error.message}`);
-        
-        return { success: true, data };
-
-    } catch (error: any) {
-        return { success: false, message: error.message };
-    }
-}
-
 export async function updateAbsenceRequestStatus(requestId: number, newStatus: 'Aprovado' | 'Rejeitado') {
     try {
         const { error } = await supabase
@@ -123,5 +102,3 @@ export async function updateAbsenceRequestStatus(requestId: number, newStatus: '
         return { success: false, message: error.message };
     }
 }
-
-    

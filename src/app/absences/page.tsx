@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useState, useEffect } from 'react';
-import { getAbsenceRequestsForEmployee } from '@/app/actions/absence-actions';
+import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/models';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -33,13 +33,28 @@ export default function AbsencePage() {
   useEffect(() => {
     const fetchRequests = async () => {
       setIsLoading(true);
-      const result = await getAbsenceRequestsForEmployee();
-      if (result.success) {
-        setRequests(result.data || []);
-      } else {
-        toast({ variant: 'destructive', title: 'Erro', description: result.message });
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error("Usuário não autenticado.");
+        }
+        const userId = session.user.id;
+
+        const { data, error } = await supabase
+            .from('faltas_programadas')
+            .select('*')
+            .eq('funcionario_id', userId)
+            .order('criado_em', { ascending: false });
+
+        if (error) {
+          throw new Error(`Falha ao buscar solicitações: ${error.message}`);
+        }
+        setRequests(data || []);
+      } catch (error: any) {
+         toast({ variant: 'destructive', title: 'Erro', description: error.message });
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     fetchRequests();
   }, [toast]);
