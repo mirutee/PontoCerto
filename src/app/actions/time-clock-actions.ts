@@ -9,17 +9,20 @@ import type { Database } from '@/lib/supabase/models';
 type PointRecordInsert = Database['public']['Tables']['ponto_funcionarios']['Insert'];
 
 const registerTimeClockSchema = z.object({
-  photoDataUrl: z.string().optional(),
-  justification: z.string().optional(),
+  photoDataUrl: z.string().nullable(),
+  justification: z.string().nullable(),
 });
 
 export async function registerTimeClockAction(formData: FormData) {
   const cookieStore = cookies();
   const supabase = createSupabaseServerClient(cookieStore);
 
+  const photoValue = formData.get('photoDataUrl');
+  const justificationValue = formData.get('justification');
+
   const rawData = {
-    photoDataUrl: formData.get('photoDataUrl') as string | undefined,
-    justification: formData.get('justification') as string | undefined,
+    photoDataUrl: typeof photoValue === 'string' ? photoValue : null,
+    justification: typeof justificationValue === 'string' ? justificationValue : null,
   };
 
   const validation = registerTimeClockSchema.safeParse(rawData);
@@ -30,8 +33,8 @@ export async function registerTimeClockAction(formData: FormData) {
   
   const { photoDataUrl, justification } = validation.data;
 
-  if (!photoDataUrl && !justification) {
-      return { success: false, message: 'É necessário uma foto ou uma justificativa.' };
+  if (!photoDataUrl && !(justification && justification.trim())) {
+      return { success: false, message: 'É necessário uma foto ou uma justificativa válida.' };
   }
 
   try {
