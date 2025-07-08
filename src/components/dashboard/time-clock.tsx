@@ -22,6 +22,7 @@ import {
   ArrowDownCircle,
   Loader2,
   Camera,
+  Video,
   VideoOff,
   CheckCircle,
 } from 'lucide-react';
@@ -35,10 +36,8 @@ export default function TimeClock() {
   const [lastCheckIn, setLastCheckIn] = useState<Date | null>(null);
   const { toast } = useToast();
 
-  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(
-    null
-  );
-  const [isCameraStarting, setIsCameraStarting] = useState(false);
+  const [isCameraVisible, setIsCameraVisible] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
   const [isJustificationDialogOpen, setIsJustificationDialogOpen] =
     useState(false);
   const [justification, setJustification] = useState('');
@@ -47,8 +46,14 @@ export default function TimeClock() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const stopCamera = useCallback(() => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setCountdown(null);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -56,6 +61,7 @@ export default function TimeClock() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    setIsCameraVisible(false);
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -63,23 +69,25 @@ export default function TimeClock() {
       typeof window === 'undefined' ||
       !navigator.mediaDevices?.getUserMedia
     ) {
-      setHasCameraPermission(false);
-      return;
+      toast({
+        variant: 'destructive',
+        title: 'Câmera não suportada',
+        description: 'Seu navegador não suporta acesso à câmera.',
+      });
+      return false;
     }
     if (streamRef.current?.active) {
-      return;
+      return true;
     }
 
-    setIsCameraStarting(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      setHasCameraPermission(true);
+      return true;
     } catch (error) {
-      setHasCameraPermission(false);
       let title = 'Erro ao acessar a câmera';
       let description =
         'Não foi possível iniciar a câmera. Verifique as permissões.';
@@ -88,7 +96,7 @@ export default function TimeClock() {
         if (error.name === 'NotAllowedError') {
           title = 'Permissão da câmera negada';
           description =
-            'Permita o acesso à câmera nas configurações do seu navegador para usar esta função. A sua empresa será notificada.';
+            'Permita o acesso à câmera nas configurações do seu navegador para usar esta função.';
         } else if (error.name === 'NotFoundError') {
           title = 'Nenhuma câmera encontrada';
           description = 'Não encontramos um dispositivo de câmera conectado.';
@@ -96,69 +104,48 @@ export default function TimeClock() {
           title = 'Câmera em uso';
           description = 'Outro aplicativo ou aba pode estar usando a câmera.';
         } else if (error.name === 'SecurityError') {
-            title = 'Acesso Inseguro';
-            description = 'O acesso à câmera é permitido apenas em conexões seguras (HTTPS).';
+          title = 'Acesso Inseguro';
+          description =
+            'O acesso à câmera é permitido apenas em conexões seguras (HTTPS).';
         }
       }
       toast({ variant: 'destructive', title, description, duration: 9000 });
-    } finally {
-      setIsCameraStarting(false);
+      return false;
     }
   }, [toast]);
 
-  useEffect(() => {
-    if (isCheckedIn) {
-      stopCamera();
-    } else {
-      startCamera();
-    }
-  }, [isCheckedIn, startCamera, stopCamera]);
-
-  useEffect(() => {
-    setTime(new Date());
-    const timer = setInterval(() => setTime(new Date()), 1000);
-
-    // Cleanup camera on component unmount
-    return () => {
-      clearInterval(timer);
-      stopCamera();
-    };
-  }, [stopCamera]);
-
-  const handleClockIn = async () => {
-    setIsSubmitting(true);
+  const captureAndSubmitPhoto = useCallback(async () => {
     let photoDataUrl: string | undefined;
 
-    if (hasCameraPermission && videoRef.current && canvasRef.current) {
+    if (isCameraVisible && videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current;
       const video = videoRef.current;
-      if (video.videoWidth === 0) {
-        toast({
-            variant: 'destructive',
-            title: 'Erro de Câmera',
-            description: 'A câmera ainda não está pronta. Tente novamente em um segundo.'
-        });
+      if (video.videoWidth > 0) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        if (context) {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          photoDataUrl = canvas.toDataURL('image/jpeg');
+        }
+      }
+    }
+    
+    stopCamera();
+
+    if (!photoDataUrl) {
+        toast({ variant: 'destructive', title: 'Falha na Captura', description: 'Não foi possível capturar a imagem da câmera.' });
         setIsSubmitting(false);
         return;
-      }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext('2d');
-      if (context) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        photoDataUrl = canvas.toDataURL('image/jpeg');
-      }
     }
 
     const formData = new FormData();
-    if (photoDataUrl) {
-      formData.append('photoDataUrl', photoDataUrl);
-    }
+    formData.append('photoDataUrl', photoDataUrl);
 
     const result = await registerTimeClockAction(formData);
 
     if (result.success) {
-      setIsCheckedIn(true); // This will trigger the useEffect to stop the camera
+      setIsCheckedIn(true);
       const now = new Date();
       setLastCheckIn(now);
       toast({ title: 'Sucesso!', description: result.message });
@@ -170,6 +157,44 @@ export default function TimeClock() {
       });
     }
     setIsSubmitting(false);
+  }, [isCameraVisible, stopCamera, toast]);
+
+
+  useEffect(() => {
+    if (countdown === 0) {
+        captureAndSubmitPhoto();
+    }
+  }, [countdown, captureAndSubmitPhoto]);
+
+
+  useEffect(() => {
+    setTime(new Date());
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => {
+      clearInterval(timer);
+      stopCamera();
+    };
+  }, [stopCamera]);
+
+  const handleClockInClick = async () => {
+    setIsSubmitting(true);
+    const cameraStarted = await startCamera();
+    if (cameraStarted) {
+      setIsCameraVisible(true);
+      setCountdown(3);
+      countdownIntervalRef.current = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownIntervalRef.current!);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setIsJustificationDialogOpen(true);
+      setIsSubmitting(false);
+    }
   };
 
   const handleJustificationSubmit = async () => {
@@ -189,7 +214,7 @@ export default function TimeClock() {
     const result = await registerTimeClockAction(formData);
 
     if (result.success) {
-      setIsCheckedIn(true); // This also stops the camera via useEffect
+      setIsCheckedIn(true);
       const now = new Date();
       setLastCheckIn(now);
       toast({ title: 'Sucesso!', description: result.message });
@@ -206,23 +231,11 @@ export default function TimeClock() {
   };
 
   const handleCheckOut = () => {
-    setIsCheckedIn(false); // This will trigger the useEffect to start the camera
-    const now = new Date();
-    // This is a placeholder for the UI feedback. A real checkout would need its own photo capture logic.
+    setIsCheckedIn(false);
     toast({
       title: 'Pronto para Registrar Saída',
-      description: `Sua saída será registrada às ${now.toLocaleTimeString(
-        'pt-BR'
-      )}. Aponte para a câmera.`,
+      description: `Clique em 'Registrar Saída' para iniciar a captura.`,
     });
-  };
-
-  const handleClockInClick = () => {
-    if (hasCameraPermission) {
-      handleClockIn();
-    } else {
-      setIsJustificationDialogOpen(true);
-    }
   };
 
   if (time === null) {
@@ -237,6 +250,38 @@ export default function TimeClock() {
       </Card>
     );
   }
+
+  const ClockInButton = () => (
+    <Button
+      onClick={handleClockInClick}
+      className="w-full bg-green-600 hover:bg-green-700 text-primary-foreground"
+      disabled={isSubmitting}
+    >
+      {isSubmitting ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Camera className="mr-2 h-4 w-4" />
+      )}
+      {isSubmitting ? 'Registrando...' : 'Registrar Chegada'}
+    </Button>
+  );
+
+  const ClockOutButton = () => (
+    <Button
+      onClick={isCheckedIn ? handleCheckOut : handleClockInClick}
+      variant={isCheckedIn ? 'destructive' : 'default'}
+      className="w-full"
+      disabled={isSubmitting}
+    >
+      {isSubmitting ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+         isCheckedIn ? <ArrowDownCircle className="mr-2 h-4 w-4" /> : <Camera className="mr-2 h-4 w-4" />
+      )}
+      {isSubmitting ? 'Registrando...' : (isCheckedIn ? 'Registrar Saída' : 'Registrar Chegada')}
+    </Button>
+  );
+
 
   return (
     <>
@@ -257,37 +302,35 @@ export default function TimeClock() {
           <div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden flex items-center justify-center">
             <video
               ref={videoRef}
-              className={`w-full h-full object-cover ${
-                isCheckedIn ? 'hidden' : 'block'
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                isCameraVisible ? 'opacity-100' : 'opacity-0'
               }`}
               autoPlay
               muted
               playsInline
             />
-            
-            {!isCheckedIn && isCameraStarting && (
-                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 p-4 text-center">
-                    <Loader2 className="h-8 w-8 text-muted-foreground animate-spin" />
-                    <p className="text-sm text-muted-foreground mt-4">Iniciando câmera...</p>
-                </div>
+
+            {!isCameraVisible && !isCheckedIn && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                <Video className="h-12 w-12" />
+                <p className="mt-2 text-sm">Câmera pronta</p>
+              </div>
+            )}
+
+            {isCameraVisible && countdown !== null && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <p className="text-8xl font-bold text-white tabular-nums">
+                  {countdown}
+                </p>
+              </div>
             )}
             
             {isCheckedIn && (
-                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 p-4 text-center">
+                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted p-4 text-center">
                     <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
                     <p className="font-semibold">Entrada Registrada</p>
                     <p className="text-sm text-muted-foreground">Câmera desligada.</p>
                 </div>
-            )}
-
-            {!isCheckedIn && !isCameraStarting && hasCameraPermission === false && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted/80 p-4 text-center">
-                <VideoOff className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="font-semibold">Câmera indisponível</p>
-                <p className="text-sm text-muted-foreground">
-                  O registro manual com justificativa será usado.
-                </p>
-              </div>
             )}
           </div>
 
@@ -309,30 +352,9 @@ export default function TimeClock() {
               </p>
             )}
           </div>
+          
+          <ClockOutButton />
 
-          {isCheckedIn ? (
-            <Button
-              onClick={handleCheckOut}
-              variant="destructive"
-              className="w-full"
-            >
-              <ArrowDownCircle className="mr-2 h-4 w-4" />
-              Registrar Saída
-            </Button>
-          ) : (
-            <Button
-              onClick={handleClockInClick}
-              className="w-full bg-green-600 hover:bg-green-700 text-primary-foreground"
-              disabled={isSubmitting || hasCameraPermission === null || isCameraStarting}
-            >
-              {isSubmitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Camera className="mr-2 h-4 w-4" />
-              )}
-              {isSubmitting ? 'Registrando...' : 'Registrar Chegada'}
-            </Button>
-          )}
         </CardContent>
       </Card>
 
@@ -364,7 +386,10 @@ export default function TimeClock() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setIsJustificationDialogOpen(false)}
+              onClick={() => {
+                  setIsJustificationDialogOpen(false);
+                  setIsSubmitting(false);
+              }}
             >
               Cancelar
             </Button>
