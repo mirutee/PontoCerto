@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -43,11 +44,11 @@ export async function createAbsenceRequestAction(formData: FormData): Promise<{
   const { timeOffType, startDate, endDate, justification, attachment } = validation.data;
 
   try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       throw new Error('Usuário não autenticado.');
     }
-    const userId = session.user.id;
+    const userId = user.id;
 
     const { data: employeeData, error: employeeError } = await supabase
       .from('funcionarios')
@@ -104,8 +105,8 @@ export async function updateAbsenceRequestStatus(requestId: number, newStatus: '
     const cookieStore = cookies();
     const supabase = createSupabaseServerClient(cookieStore);
     try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
             throw new Error('Usuário não autenticado.');
         }
         

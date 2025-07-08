@@ -29,7 +29,7 @@ async function uploadPhoto(
   }
 
   const imageBuffer = Buffer.from(base64Data, 'base64');
-  const filePath = `public/${userId}/${new Date().toISOString()}.jpg`;
+  const filePath = `${userId}/${new Date().toISOString()}.jpg`;
 
   const { error: uploadError } = await supabase.storage
     .from('time-clock-photos')
@@ -40,7 +40,7 @@ async function uploadPhoto(
 
   if (uploadError) {
     console.error('Supabase Storage Error:', uploadError);
-    throw new Error(`Falha no Upload da Foto: ${uploadError.message}. Verifique as permissões do bucket 'time-clock-photos'.`);
+    throw new Error(`Falha no Upload da Foto: ${uploadError.message}. Verifique as permissões (RLS) do bucket 'time-clock-photos'.`);
   }
 
   const { data: urlData } = supabase.storage
@@ -75,13 +75,13 @@ export async function registerTimeClockAction(formData: FormData) {
 
   try {
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-    if (sessionError || !session) {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
       throw new Error('Usuário não autenticado. A sessão pode ter expirado.');
     }
-    const userId = session.user.id;
+    const userId = user.id;
     const now = new Date();
     let photoUrl = null;
 
@@ -162,15 +162,15 @@ export async function getClockStatus() {
     const cookieStore = cookies();
     const supabase = createSupabaseServerClient(cookieStore);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return { clockedIn: false, lastCheckInTime: null };
     }
 
     const { data: lastEntry } = await supabase
       .from('ponto_funcionarios')
       .select('hora_entrada, data')
-      .eq('funcionario_id', session.user.id)
+      .eq('funcionario_id', user.id)
       .eq('status', 'Aberto')
       .order('data', { ascending: false })
       .order('hora_entrada', { ascending: false })

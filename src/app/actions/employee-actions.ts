@@ -111,8 +111,8 @@ export async function updateEmployeeAction(input: z.infer<typeof updateEmployeeS
     const supabase = createSupabaseServerClient(cookieStore);
 
     try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
+        const { data: { user }, error: userErrorAuth } = await supabase.auth.getUser();
+        if (userErrorAuth || !user) {
             throw new Error('Usuário não autenticado.');
         }
 
@@ -152,8 +152,8 @@ export async function toggleEmployeeStatusAction(input: z.infer<typeof toggleEmp
     const supabase = createSupabaseServerClient(cookieStore);
 
     try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
             throw new Error('Usuário não autenticado.');
         }
 
