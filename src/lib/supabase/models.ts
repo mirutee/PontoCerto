@@ -461,6 +461,7 @@ export interface Database {
       ponto_funcionarios: {
         Row: {
           data: string | null
+          foto_entrada_url: string | null
           funcionario_id: string | null
           hora_entrada: string | null
           hora_saida: string | null
@@ -473,6 +474,7 @@ export interface Database {
         }
         Insert: {
           data?: string | null
+          foto_entrada_url?: string | null
           funcionario_id?: string | null
           hora_entrada?: string | null
           hora_saida?: string | null
@@ -485,6 +487,7 @@ export interface Database {
         }
         Update: {
           data?: string | null
+          foto_entrada_url?: string | null
           funcionario_id?: string | null
           hora_entrada?: string | null
           hora_saida?: string | null
@@ -623,5 +626,3 @@ export interface Database {
     }
   }
 }
-
-    
