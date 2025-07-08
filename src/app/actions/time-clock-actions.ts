@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -44,13 +45,14 @@ export async function registerTimeClockAction(formData: FormData) {
 
   try {
     const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
       throw new Error('Usuário não autenticado.');
     }
-    const userId = user.id;
+    const userId = session.user.id;
 
     let photoUrl = null;
     if (photoDataUrl) {
