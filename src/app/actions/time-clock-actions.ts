@@ -29,17 +29,18 @@ async function uploadPhoto(
   }
 
   const imageBuffer = Buffer.from(base64Data, 'base64');
-  const filePath = `time_clock_photos/${userId}/${new Date().toISOString()}.jpg`;
+  const filePath = `public/${userId}/${new Date().toISOString()}.jpg`;
 
   const { error: uploadError } = await supabase.storage
     .from('time-clock-photos')
     .upload(filePath, imageBuffer, {
       contentType: 'image/jpeg',
-      upsert: true,
+      upsert: false,
     });
 
   if (uploadError) {
-    throw new Error(`Falha no upload da foto: ${uploadError.message}`);
+    console.error('Supabase Storage Error:', uploadError);
+    throw new Error(`Falha no Upload da Foto: ${uploadError.message}. Verifique as permissões do bucket 'time-clock-photos'.`);
   }
 
   const { data: urlData } = supabase.storage
@@ -78,7 +79,7 @@ export async function registerTimeClockAction(formData: FormData) {
       error: sessionError,
     } = await supabase.auth.getSession();
     if (sessionError || !session) {
-      throw new Error('Usuário não autenticado.');
+      throw new Error('Usuário não autenticado. A sessão pode ter expirado.');
     }
     const userId = session.user.id;
     const now = new Date();
@@ -93,7 +94,7 @@ export async function registerTimeClockAction(formData: FormData) {
         funcionario_id: userId,
         data: format(now, 'yyyy-MM-dd'),
         hora_entrada: format(now, 'HH:mm:ss'),
-        status: 'Pendente',
+        status: 'Aberto',
         foto_entrada_url: photoUrl,
         observacao_entrada: justification,
       };
@@ -101,8 +102,10 @@ export async function registerTimeClockAction(formData: FormData) {
       const { error: insertError } = await supabase
         .from('ponto_funcionarios')
         .insert(newPointRecord);
+        
       if (insertError) {
-        throw new Error(`Falha ao registrar a entrada: ${insertError.message}`);
+        console.error('Supabase Insert Error:', insertError);
+        throw new Error(`Falha ao Salvar no BD: ${insertError.message}. Verifique as permissões (RLS) da tabela 'ponto_funcionarios'.`);
       }
       return {
         success: true,
@@ -115,7 +118,7 @@ export async function registerTimeClockAction(formData: FormData) {
         .from('ponto_funcionarios')
         .select('id')
         .eq('funcionario_id', userId)
-        .is('hora_saida', null)
+        .eq('status', 'Aberto')
         .order('data', { ascending: false })
         .order('hora_entrada', { ascending: false })
         .limit(1)
@@ -138,8 +141,10 @@ export async function registerTimeClockAction(formData: FormData) {
         .from('ponto_funcionarios')
         .update(updateData)
         .eq('id', lastEntry.id);
+
       if (updateError) {
-        throw new Error(`Falha ao registrar a saída: ${updateError.message}`);
+        console.error('Supabase Update Error:', updateError);
+        throw new Error(`Falha ao Atualizar no BD: ${updateError.message}. Verifique as permissões (RLS) para atualização.`);
       }
       return {
         success: true,
@@ -148,6 +153,7 @@ export async function registerTimeClockAction(formData: FormData) {
       };
     }
   } catch (error: any) {
+    console.error('Register Time Clock Action Error:', error);
     return { success: false, message: error.message };
   }
 }
@@ -165,7 +171,7 @@ export async function getClockStatus() {
       .from('ponto_funcionarios')
       .select('hora_entrada, data')
       .eq('funcionario_id', session.user.id)
-      .is('hora_saida', null)
+      .eq('status', 'Aberto')
       .order('data', { ascending: false })
       .order('hora_entrada', { ascending: false })
       .limit(1)
